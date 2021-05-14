@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "PopH264Unreal.h"
 #include "PopH264ActorComponent.generated.h"
 
 
@@ -20,7 +21,7 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	
-	//FPopH264UnrealModule	mDll;
+	TUniquePtr<FPopH264DecoderInstance>	mDecoder;
 
 public:	
 	// Called every frame

@@ -19,8 +19,7 @@ void UPopH264ActorComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
-	
+	mDecoder = MakeUnique<FPopH264DecoderInstance>();
 }
 
 

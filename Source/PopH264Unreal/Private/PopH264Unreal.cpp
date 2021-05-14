@@ -57,6 +57,41 @@ void FPopH264UnrealModule::ShutdownModule()
 	ExampleLibraryHandle = nullptr;
 }
 
+//	c++17
+#if __cplusplus != 201703L && !defined(_HAS_CXX17)
+namespace std
+{
+	//	implementation of c++17's std::size() to get safe C-array size
+	template<typename T,size_t CARRAYSIZE>
+	static int size(const T(&CArray)[CARRAYSIZE])
+	{
+		return CARRAYSIZE;
+	}
+}
+#endif
+
+
+FPopH264DecoderInstance::FPopH264DecoderInstance()
+{
+	char ErrorBuffer[1024];
+	const char* OptionsJson = nullptr;
+	mInstanceHandle = PopH264_CreateDecoder( OptionsJson, ErrorBuffer, std::size(ErrorBuffer) );
+
+
+	{
+		char DecodersJsonuffer[1024];
+		PopH264_EnumDecoders( DecodersJsonuffer, std::size(DecodersJsonuffer) );
+	}
+}
+
+FPopH264DecoderInstance::~FPopH264DecoderInstance()
+{
+	PopH264_DestroyDecoder(mInstanceHandle);
+}
+
+
 #undef LOCTEXT_NAMESPACE
 	
 IMPLEMENT_MODULE(FPopH264UnrealModule, PopH264Unreal)
+
+
