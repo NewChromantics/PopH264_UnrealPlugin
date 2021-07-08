@@ -27,7 +27,8 @@ public class PopH264Unreal : ModuleRules
 			{
 				"Core",
 				"PopH264UnrealLibrary",
-				"Projects"
+				"Projects",
+				"Json"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

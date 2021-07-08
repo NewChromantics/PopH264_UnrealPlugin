@@ -71,6 +71,12 @@ namespace std
 #endif
 
 
+TUniquePtr<FPopH264DecoderInstance> FPopH264DecoderInstance::AllocDecoder()
+{
+	auto Decoder = MakeUnique<FPopH264DecoderInstance>();
+	return Decoder;
+}
+
 FPopH264DecoderInstance::FPopH264DecoderInstance()
 {
 	char ErrorBuffer[1024];
@@ -88,6 +94,187 @@ FPopH264DecoderInstance::~FPopH264DecoderInstance()
 {
 	PopH264_DestroyDecoder(mInstanceHandle);
 }
+
+void FPopH264DecoderInstance::PushH264Data(const TArray<uint8_t>& H264Data,size_t FrameNumber)
+{
+	//	gr: if this fails, probably shutdown (bad instance)
+	auto* DataMutable = const_cast<uint8_t*>(H264Data.GetData());
+	int32_t FrameNumber32 = FrameNumber;
+	auto Error = PopH264_PushData( mInstanceHandle, DataMutable, H264Data.Num(), FrameNumber32 );
+}
+
+bool FPopH264DecoderInstance::PushTestData(const char* TestDataName,size_t FrameNumber)
+{
+	//	get some test data
+	TArray<uint8_t> H264Data;
+	H264Data.Init(0,50*1024);
+	auto DataSize = PopH264_GetTestData(TestDataName, H264Data.GetData(), H264Data.Num() );
+	if ( DataSize <= 0 )
+		return false;
+	
+	auto AllowShrinking = true;
+	H264Data.SetNum(DataSize,AllowShrinking);
+	PushH264Data(H264Data,FrameNumber);
+
+	return true;
+}
+
+TSharedPtr<FJsonObject> ParseJson(TArray<char>& JsonStringArray)
+{
+	FString JsonString = ANSI_TO_TCHAR( JsonStringArray.GetData() );
+	
+	TArray<TSharedPtr<FJsonValue>> JsonParsed;  
+	auto JsonReader = TJsonReaderFactory<char>::Create(JsonString);
+	
+	if ( !FJsonSerializer::Deserialize(JsonReader, JsonParsed) )
+		return nullptr;
+	
+	//	get the parsed json as an object
+	auto pJsonObject = JsonParsed[0]->AsObject();
+	return pJsonObject;
+	/*
+		Culture = JsonParsed[0]->AsObject()->GetStringField(FString("Culture"));
+		MusicVolume = JsonParsed[1]->AsObject()->GetNumberField(FString("MusicVolume"));
+		SoundVolume = JsonParsed[2]->AsObject()->GetNumberField(FString("SoundVolume"));
+*/}
+
+class PopH264FramePlaneMeta
+{
+public:
+	void			ParseJson(FJsonObject& Json);
+
+	EPixelFormat	mPixelFormat = PF_Unknown;
+	int32_t			mWidth = 0;
+	int32_t			mHeight = 0;
+	int32_t			mDataSize = 0;
+	int32_t			mChannels = 0;
+};
+
+class PopH264FrameMeta
+{
+public:
+	void					ParseJson(FJsonObject& Json);
+
+	FString					mError;
+	FString					mDecoder;
+	bool					mHardwareAccelerated = false;
+	bool					mEndOfStream = false;
+	int32_t					mFrameNumber = 0;
+	int32_t					mFramesQueued = 0;
+	int32_t					mRotation = 0;	//  clockwise rotation in degrees
+	FString					mYuvColourMatrixName;
+	int32_t					mAverageBitsPerSecondRate = 0;
+	int32_t					mRowStrideBytes = 0;
+	bool					mFlipped = false;
+	bool					mImageWidth = false;
+	bool					mImageHeight = false;
+	//bool					mImageRect = false;	//	[x,y,w,h]
+	
+	PopH264FramePlaneMeta	mPlane0;
+	PopH264FramePlaneMeta	mPlane1;
+	PopH264FramePlaneMeta	mPlane2;
+};
+
+void PopH264FramePlaneMeta::ParseJson(FJsonObject& Json)
+{
+	mWidth = Json.GetIntegerField("Width");
+	mHeight = Json.GetIntegerField("Height");
+	mDataSize = Json.GetIntegerField("DataSize");
+	mChannels = Json.GetIntegerField("Channels");
+
+	auto FormatString = Json.GetStringField("Format");
+	//	convert to UE format
+}
+
+void PopH264FrameMeta::ParseJson(FJsonObject& Json)
+{
+	mError = Json.GetStringField("Error");
+	mDecoder = Json.GetStringField("Decoder");
+	mHardwareAccelerated = Json.GetBoolField("HardwareAccelerated");
+	mEndOfStream = Json.GetBoolField("EndOfStream");
+	mFrameNumber = Json.GetIntegerField("FrameNumber");
+	mFramesQueued = Json.GetIntegerField("FramesQueued");
+	mRotation = Json.GetIntegerField("Rotation");
+	mYuvColourMatrixName = Json.GetStringField("YuvColourMatrixName");
+	mAverageBitsPerSecondRate = Json.GetIntegerField("AverageBitsPerSecondRate");
+	mRowStrideBytes = Json.GetIntegerField("RowStrideBytes");
+	mImageWidth = Json.GetIntegerField("ImageWidth");
+	mImageHeight = Json.GetIntegerField("ImageHeight");
+
+	auto JsonPlanes = Json.GetArrayField("Planes");
+	if ( JsonPlanes.Num() >= 1 )
+	{
+		auto pPlaneJson = JsonPlanes[0]->AsObject();
+		mPlane0.ParseJson(*pPlaneJson);
+	}
+	if ( JsonPlanes.Num() >= 2 )
+	{
+		auto pPlaneJson = JsonPlanes[1]->AsObject();
+		mPlane1.ParseJson(*pPlaneJson);
+	}
+	if ( JsonPlanes.Num() >= 3 )
+	{
+		auto pPlaneJson = JsonPlanes[2]->AsObject();
+		mPlane2.ParseJson(*pPlaneJson);
+	}
+}
+
+
+UTexture2D* FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
+{
+	//	peek frame, is there a new frame?
+	TArray<char> FrameMetaString;
+	FrameMetaString.Init( '\0', 50 * 1024 );
+	PopH264_PeekFrame( mInstanceHandle, FrameMetaString.GetData(), FrameMetaString.Num() );
+		
+	//	parse json
+	auto FrameMetaJson = ParseJson(FrameMetaString);
+	//	error
+	if ( !FrameMetaJson )
+		return nullptr;
+	PopH264FrameMeta FrameMeta;
+	FrameMeta.ParseJson(*FrameMetaJson);
+	
+	//	no frame
+	if ( FrameMeta.mFrameNumber < 0 )
+		return nullptr;
+	
+	//	allocate data buffer for the frame
+	TArray<uint8_t> Plane0Data;
+	Plane0Data.Init(0x0, FrameMeta.mPlane0.mDataSize );
+	TArray<uint8_t> Plane1Data;
+	Plane0Data.Init(0x0, FrameMeta.mPlane1.mDataSize );
+	TArray<uint8_t> Plane2Data;
+	Plane0Data.Init(0x0, FrameMeta.mPlane2.mDataSize );
+	
+	auto PoppedFrameNumber = PopH264_PopFrame( mInstanceHandle, Plane0Data.GetData(), Plane0Data.Num(), Plane1Data.GetData(), Plane1Data.Num(), Plane2Data.GetData(), Plane2Data.Num() );
+	if ( PoppedFrameNumber < 0 )
+		return nullptr;
+
+	//	todo: make textures
+	UE_LOG( LogTemp, Warning, TEXT( "Todo: make textures" ) );
+	return nullptr;	
+	/*
+	//	
+	TSharedPtr<UTexture2D> pNewTexture( 
+	//	update is async, so we buffer the new frame, update the texture, then free when done
+	auto Width = 16;
+	auto Height = 16;
+UpdateTextureRegions
+(
+    int32 MipIndex,
+    uint32 NumRegions,
+    const FUpdateTextureRegion2D* ...,
+    uint32 SrcPitch,
+    uint32 SrcBpp,
+    uint8* SrcData,
+    TFunction< void*SrcData,...
+)
+*/
+}
+
+
+
 
 
 #undef LOCTEXT_NAMESPACE
