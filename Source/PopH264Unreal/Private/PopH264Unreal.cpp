@@ -37,8 +37,13 @@ void FPopH264UnrealModule::StartupModule()
 		// Call the test function in the third party library that opens a message box
 		//ExampleLibraryFunction();
 		auto Version = PopH264_GetVersion();
-		FString VersionString = FString::Printf( TEXT( "PopH264 version %d" ), Version );
-		UE_LOG( LogTemp, Warning, TEXT( "Your string: %s" ), *VersionString );
+		UE_LOG( LogTemp, Log, TEXT( "PopH264 version %d" ), Version );
+		
+		char DecodersJsonBuffer[1024] = {0};
+		PopH264_EnumDecoders( DecodersJsonBuffer, sizeof(DecodersJsonBuffer) );
+		//FString DecodersJsonString = FString::Printf( TEXT( "%s" ), DecodersJsonBuffer );
+		FString DecodersJsonString = DecodersJsonBuffer;
+		UE_LOG( LogTemp, Log, TEXT( "PopH264 Decoders: %s" ), *DecodersJsonString );
 	}
 	else
 	{
@@ -53,8 +58,11 @@ void FPopH264UnrealModule::ShutdownModule()
 	// we call this function before unloading the module.
 
 	// Free the dll handle
-	FPlatformProcess::FreeDllHandle(ExampleLibraryHandle);
-	ExampleLibraryHandle = nullptr;
+	if ( ExampleLibraryHandle )
+	{
+		FPlatformProcess::FreeDllHandle(ExampleLibraryHandle);
+		ExampleLibraryHandle = nullptr;
+	}
 }
 
 //	c++17
@@ -79,14 +87,13 @@ TUniquePtr<FPopH264DecoderInstance> FPopH264DecoderInstance::AllocDecoder()
 
 FPopH264DecoderInstance::FPopH264DecoderInstance()
 {
-	char ErrorBuffer[1024];
+	char ErrorBuffer[1024] = {0};
 	const char* OptionsJson = nullptr;
 	mInstanceHandle = PopH264_CreateDecoder( OptionsJson, ErrorBuffer, std::size(ErrorBuffer) );
 
-
+	if ( mInstanceHandle <= 0 )
 	{
-		char DecodersJsonuffer[1024];
-		PopH264_EnumDecoders( DecodersJsonuffer, std::size(DecodersJsonuffer) );
+		UE_LOG( LogTemp, Error, TEXT( "Failed to allocate PopH264 decoder(Handle %d); Error: %s" ), mInstanceHandle, ErrorBuffer );
 	}
 }
 
@@ -97,10 +104,15 @@ FPopH264DecoderInstance::~FPopH264DecoderInstance()
 
 void FPopH264DecoderInstance::PushH264Data(const TArray<uint8_t>& H264Data,size_t FrameNumber)
 {
-	//	gr: if this fails, probably shutdown (bad instance)
 	auto* DataMutable = const_cast<uint8_t*>(H264Data.GetData());
 	int32_t FrameNumber32 = FrameNumber;
 	auto Error = PopH264_PushData( mInstanceHandle, DataMutable, H264Data.Num(), FrameNumber32 );
+
+	//	gr: if this fails, probably shutdown (bad instance)
+	if ( Error < 0 )
+	{
+		UE_LOG( LogTemp, Warning, TEXT( "PopH264_PushData() returned %d. InstanceHandle=%d" ), Error, mInstanceHandle );
+	}
 }
 
 bool FPopH264DecoderInstance::PushTestData(const char* TestDataName,size_t FrameNumber)
@@ -110,8 +122,11 @@ bool FPopH264DecoderInstance::PushTestData(const char* TestDataName,size_t Frame
 	H264Data.Init(0,50*1024);
 	auto DataSize = PopH264_GetTestData(TestDataName, H264Data.GetData(), H264Data.Num() );
 	if ( DataSize <= 0 )
+	{
+		UE_LOG( LogTemp, Warning, TEXT( "No PopH264 test data named %s" ), *TestDataName );
 		return false;
-	
+	}
+		
 	auto AllowShrinking = true;
 	H264Data.SetNum(DataSize,AllowShrinking);
 	PushH264Data(H264Data,FrameNumber);
@@ -121,17 +136,21 @@ bool FPopH264DecoderInstance::PushTestData(const char* TestDataName,size_t Frame
 
 TSharedPtr<FJsonObject> ParseJson(TArray<char>& JsonStringArray)
 {
-	FString JsonString = ANSI_TO_TCHAR( JsonStringArray.GetData() );
+	//FString JsonString = ANSI_TO_TCHAR( JsonStringArray.GetData() );
+	auto* JsonStringArrayCstr = JsonStringArray.GetData();
+	FString JsonString(JsonStringArrayCstr);
+
+	TSharedPtr<FJsonObject> ParsedJsonObject;  
+	auto JsonReader = TJsonReaderFactory<>::Create(JsonString);
 	
-	TArray<TSharedPtr<FJsonValue>> JsonParsed;  
-	auto JsonReader = TJsonReaderFactory<char>::Create(JsonString);
-	
-	if ( !FJsonSerializer::Deserialize(JsonReader, JsonParsed) )
+	if ( !FJsonSerializer::Deserialize(JsonReader, ParsedJsonObject) )
+	{
+		UE_LOG( LogTemp, Warning, TEXT( "Failed to deserialise frame JSON: %s" ), *JsonString );
 		return nullptr;
-	
+	}
+
 	//	get the parsed json as an object
-	auto pJsonObject = JsonParsed[0]->AsObject();
-	return pJsonObject;
+	return ParsedJsonObject;
 	/*
 		Culture = JsonParsed[0]->AsObject()->GetStringField(FString("Culture"));
 		MusicVolume = JsonParsed[1]->AsObject()->GetNumberField(FString("MusicVolume"));
@@ -224,9 +243,17 @@ UTexture2D* FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 {
 	//	peek frame, is there a new frame?
 	TArray<char> FrameMetaString;
-	FrameMetaString.Init( '\0', 50 * 1024 );
+	//FrameMetaString.Init( '\0', 50 * 1024 );	<-- insanely slow
+	FrameMetaString.SetNum(50*1024);
+	/*
+	FrameMetaString.Reserve(50 * 1024);
+	for ( int i=0;	i<50 * 1024;	i++ )
+		FrameMetaString.Add('\0');
+		*/
 	PopH264_PeekFrame( mInstanceHandle, FrameMetaString.GetData(), FrameMetaString.Num() );
-		
+	
+	const char* FrameJsonReadable = FrameMetaString.GetData();
+	
 	//	parse json
 	auto FrameMetaJson = ParseJson(FrameMetaString);
 	//	error
