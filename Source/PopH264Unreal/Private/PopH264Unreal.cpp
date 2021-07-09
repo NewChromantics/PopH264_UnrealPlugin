@@ -181,6 +181,8 @@ void ReadJsonValue(FJsonObject& Json,FString& Value,const char* Key)
 	Value = Json.GetStringField(Key);
 }
 
+
+
 class PopH264FramePlaneMeta
 {
 public:
@@ -218,6 +220,39 @@ public:
 	PopH264FramePlaneMeta	mPlane2;
 };
 
+
+EPixelFormat GetPixelFormat(int ComponentCount,const FString& FormatName)
+{
+	//	todo: try and take advantage of PF_UYVY
+	
+	//	catch special cases (especiall non 8bit!)
+	if ( FormatName == "Float1" )
+		return PF_R32_FLOAT;
+	if ( FormatName == "Float3" )
+		return PF_FloatRGB;
+	if ( FormatName == "Float4" )
+		return PF_FloatRGBA;
+	
+	if ( FormatName == "ARGB" )
+		return PF_A8R8G8B8;
+	if ( FormatName == "BGRA" )
+		return PF_B8G8R8A8;
+	
+	//	Arthur: I might be getting the wrong values here but it seemed closest to the formats in Unity
+	switch (ComponentCount)
+	{
+		case 1: return PF_R8;
+		case 2: return PF_R8G8;
+		//case 3: return PF_R8G8B8;	//	no 24bit format
+		case 4:	return PF_R8G8B8A8;
+		
+		default:
+			UE_LOG(PopH264, Warning, TEXT("Don't know what format to use for component count %i (%s)"), ComponentCount, *FormatName );
+			return PF_Unknown;
+	}
+}
+
+
 void PopH264FramePlaneMeta::ParseJson(FJsonObject& Json)
 {
 	ReadJsonValue( Json, mWidth, "Width" ); 
@@ -228,6 +263,9 @@ void PopH264FramePlaneMeta::ParseJson(FJsonObject& Json)
 	//	convert string format to UE format
 	FString FormatString;
 	ReadJsonValue( Json, FormatString, "Format" );
+	//	gr: format will be like ChromaU, Luma, Depthf etc
+	//	so maybe easier to get the DATA format via components (we do this in unity)
+	mPixelFormat = GetPixelFormat(mChannels,FormatString);
 }
 
 
@@ -295,12 +333,13 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 		return TArray<UTexture2D*>();
 	
 	//	allocate data buffer for the frame
+	//	gr: can we use BulkData, and can we use the bulk data directly from a texture...
 	TArray<uint8_t> Plane0Data;
-	Plane0Data.Init(0x0, FrameMeta.mPlane0.mDataSize );
+	Plane0Data.SetNum(FrameMeta.mPlane0.mDataSize );
 	TArray<uint8_t> Plane1Data;
-	Plane0Data.Init(0x0, FrameMeta.mPlane1.mDataSize );
+	Plane1Data.SetNum(FrameMeta.mPlane1.mDataSize );
 	TArray<uint8_t> Plane2Data;
-	Plane0Data.Init(0x0, FrameMeta.mPlane2.mDataSize );
+	Plane2Data.SetNum(FrameMeta.mPlane2.mDataSize );
 	
 	auto PoppedFrameNumber = PopH264_PopFrame( mInstanceHandle, Plane0Data.GetData(), Plane0Data.Num(), Plane1Data.GetData(), Plane1Data.Num(), Plane2Data.GetData(), Plane2Data.Num() );
 	if ( PoppedFrameNumber < 0 )
@@ -309,17 +348,28 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 	//	gr: we could allocate textures early, then pass the Raw BulkData into the plugin and write directly
 	//		to save a copy
 	TArray<UTexture2D*> Textures;
-	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta) -> UTexture2D*
+	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex) -> UTexture2D*
 	{
 		if ( PlaneBytes.Num() == 0 )
 			return nullptr;
-			
-		UTexture2D* pTexture = UTexture2D::CreateTransient( PlaneMeta.mWidth, PlaneMeta.mHeight );
+
+		auto Width = PlaneMeta.mWidth;
+		auto Height = PlaneMeta.mHeight;
+		auto TextureNameString = FString::Printf( TEXT( "PopH264 #%d Plane%d %dx%d" ), PoppedFrameNumber, PlaneIndex, Width, Height );
+		FName TextureName( *TextureNameString );
+
+		UTexture2D* pTexture = UTexture2D::CreateTransient( Width, Height, PlaneMeta.mPixelFormat, TextureName );
+		if ( !pTexture )
 		{
 			UE_LOG( LogTemp, Error, TEXT( "Failed to allocate plane texture %dx%d" ), PlaneMeta.mWidth, PlaneMeta.mHeight );
 			return nullptr;
 		}
 		auto& Texture = *pTexture;
+		if ( !Texture.PlatformData )
+		{
+			UE_LOG( PopH264, Error, TEXT( "Allocated texture but no .PlatformData (leaking texture?)" ) );
+			return nullptr;
+		}
 		FTexture2DMipMap& TextureMip = Texture.PlatformData->Mips[0];
 		uint8_t* MipPixels = static_cast<uint8_t*>( TextureMip.BulkData.Lock(LOCK_READ_WRITE) );
 		if ( !MipPixels )
@@ -341,16 +391,16 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 		Texture.UpdateResource();
 		return pTexture;
 	};
-	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta)
+	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex)
 	{
-		auto* Texture = MakeTexture( PlaneBytes, PlaneMeta );
+		auto* Texture = MakeTexture( PlaneBytes, PlaneMeta, PlaneIndex );
 		if ( !Texture )
 			return;
 		Textures.Push(Texture);
 	};
-	MakeAndAddTexture( Plane0Data, FrameMeta.mPlane0 );
-	MakeAndAddTexture( Plane1Data, FrameMeta.mPlane1 );
-	MakeAndAddTexture( Plane2Data, FrameMeta.mPlane2 );
+	MakeAndAddTexture( Plane0Data, FrameMeta.mPlane0, 0 );
+	MakeAndAddTexture( Plane1Data, FrameMeta.mPlane1, 1 );
+	MakeAndAddTexture( Plane2Data, FrameMeta.mPlane2, 2 );
 	
 	return Textures;
 	/*
