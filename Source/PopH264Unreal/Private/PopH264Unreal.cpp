@@ -157,6 +157,29 @@ TSharedPtr<FJsonObject> ParseJson(TArray<char>& JsonStringArray)
 		SoundVolume = JsonParsed[2]->AsObject()->GetNumberField(FString("SoundVolume"));
 */}
 
+
+//	wrappers to suppress errors/warnings for missing keys (which don't mention the keys)
+void ReadJsonValue(FJsonObject& Json,int32_t& Value,const char* Key)
+{
+	if ( !Json.HasField(Key) )
+		return;
+	Value = Json.GetIntegerField(Key);
+}
+
+void ReadJsonValue(FJsonObject& Json,bool& Value,const char* Key)
+{
+	if ( !Json.HasField(Key) )
+		return;
+	Value = Json.GetBoolField(Key);
+}
+
+void ReadJsonValue(FJsonObject& Json,FString& Value,const char* Key)
+{
+	if ( !Json.HasField(Key) )
+		return;
+	Value = Json.GetStringField(Key);
+}
+
 class PopH264FramePlaneMeta
 {
 public:
@@ -185,9 +208,9 @@ public:
 	int32_t					mAverageBitsPerSecondRate = 0;
 	int32_t					mRowStrideBytes = 0;
 	bool					mFlipped = false;
-	bool					mImageWidth = false;
-	bool					mImageHeight = false;
-	//bool					mImageRect = false;	//	[x,y,w,h]
+	int32_t					mImageWidth = false;
+	int32_t					mImageHeight = false;
+	//int32_tx4					mImageRect = false;	//	[x,y,w,h]
 	
 	PopH264FramePlaneMeta	mPlane0;
 	PopH264FramePlaneMeta	mPlane1;
@@ -196,29 +219,32 @@ public:
 
 void PopH264FramePlaneMeta::ParseJson(FJsonObject& Json)
 {
-	mWidth = Json.GetIntegerField("Width");
-	mHeight = Json.GetIntegerField("Height");
-	mDataSize = Json.GetIntegerField("DataSize");
-	mChannels = Json.GetIntegerField("Channels");
-
-	auto FormatString = Json.GetStringField("Format");
-	//	convert to UE format
+	ReadJsonValue( Json, mWidth, "Width" ); 
+	ReadJsonValue( Json, mHeight, "Height" ); 
+	ReadJsonValue( Json, mDataSize, "DataSize" ); 
+	ReadJsonValue( Json, mChannels, "Channels" ); 
+	
+	//	convert string format to UE format
+	FString FormatString;
+	ReadJsonValue( Json, FormatString, "Format" );
 }
+
 
 void PopH264FrameMeta::ParseJson(FJsonObject& Json)
 {
-	mError = Json.GetStringField("Error");
-	mDecoder = Json.GetStringField("Decoder");
-	mHardwareAccelerated = Json.GetBoolField("HardwareAccelerated");
-	mEndOfStream = Json.GetBoolField("EndOfStream");
-	mFrameNumber = Json.GetIntegerField("FrameNumber");
-	mFramesQueued = Json.GetIntegerField("FramesQueued");
-	mRotation = Json.GetIntegerField("Rotation");
-	mYuvColourMatrixName = Json.GetStringField("YuvColourMatrixName");
-	mAverageBitsPerSecondRate = Json.GetIntegerField("AverageBitsPerSecondRate");
-	mRowStrideBytes = Json.GetIntegerField("RowStrideBytes");
-	mImageWidth = Json.GetIntegerField("ImageWidth");
-	mImageHeight = Json.GetIntegerField("ImageHeight");
+	ReadJsonValue( Json, mError, "Error");
+	ReadJsonValue( Json, mDecoder, "Decoder");
+	ReadJsonValue( Json, mHardwareAccelerated, "HardwareAccelerated");
+	ReadJsonValue( Json, mEndOfStream, "EndOfStream");
+	ReadJsonValue( Json, mFrameNumber, "FrameNumber");
+	ReadJsonValue( Json, mFramesQueued, "FramesQueued");
+	ReadJsonValue( Json, mRotation, "Rotation");
+	ReadJsonValue( Json, mYuvColourMatrixName, "YuvColourMatrixName");
+	ReadJsonValue( Json, mAverageBitsPerSecondRate, "AverageBitsPerSecondRate");
+	ReadJsonValue( Json, mRowStrideBytes, "RowStrideBytes");
+	ReadJsonValue( Json, mImageWidth, "ImageWidth");
+	ReadJsonValue( Json, mImageHeight, "RowStrideBytes");
+	ReadJsonValue( Json, mRowStrideBytes, "ImageHeight");
 
 	auto JsonPlanes = Json.GetArrayField("Planes");
 	if ( JsonPlanes.Num() >= 1 )
