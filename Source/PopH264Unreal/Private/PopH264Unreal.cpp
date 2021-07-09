@@ -4,12 +4,16 @@
 #include "Core.h"
 #include "Modules/ModuleManager.h"
 #include "Interfaces/IPluginManager.h"
+#include "GenericPlatform/GenericPlatformMath.h"
 
-//	gr: add include path to plugin build.cs
-//#include "PopH264UnrealLibrary/ExampleLibrary.h"
+//	gr: todo: add include path to plugin build.cs
 #include "PopH264UnrealLibrary/com.newchromantics.poph264-1.3.38/windows/Release_x64/PopH264.h"
 
 #define LOCTEXT_NAMESPACE "FPopH264UnrealModule"
+
+
+DEFINE_LOG_CATEGORY(PopH264)
+
 
 void FPopH264UnrealModule::StartupModule()
 {
@@ -37,13 +41,13 @@ void FPopH264UnrealModule::StartupModule()
 		// Call the test function in the third party library that opens a message box
 		//ExampleLibraryFunction();
 		auto Version = PopH264_GetVersion();
-		UE_LOG( LogTemp, Log, TEXT( "PopH264 version %d" ), Version );
+		UE_LOG( PopH264, Log, TEXT( "PopH264 version %d" ), Version );
 		
 		char DecodersJsonBuffer[1024] = {0};
 		PopH264_EnumDecoders( DecodersJsonBuffer, sizeof(DecodersJsonBuffer) );
 		//FString DecodersJsonString = FString::Printf( TEXT( "%s" ), DecodersJsonBuffer );
 		FString DecodersJsonString = DecodersJsonBuffer;
-		UE_LOG( LogTemp, Log, TEXT( "PopH264 Decoders: %s" ), *DecodersJsonString );
+		UE_LOG( PopH264, Log, TEXT( "PopH264 Decoders: %s" ), *DecodersJsonString );
 	}
 	else
 	{
@@ -85,6 +89,7 @@ TUniquePtr<FPopH264DecoderInstance> FPopH264DecoderInstance::AllocDecoder()
 	return Decoder;
 }
 
+
 FPopH264DecoderInstance::FPopH264DecoderInstance()
 {
 	char ErrorBuffer[1024] = {0};
@@ -93,7 +98,7 @@ FPopH264DecoderInstance::FPopH264DecoderInstance()
 
 	if ( mInstanceHandle <= 0 )
 	{
-		UE_LOG( LogTemp, Error, TEXT( "Failed to allocate PopH264 decoder(Handle %d); Error: %s" ), mInstanceHandle, ErrorBuffer );
+		UE_LOG( PopH264, Error, TEXT( "Failed to allocate PopH264 decoder(Handle %d); Error: %s" ), mInstanceHandle, ErrorBuffer );
 	}
 }
 
@@ -111,7 +116,7 @@ void FPopH264DecoderInstance::PushH264Data(const TArray<uint8_t>& H264Data,size_
 	//	gr: if this fails, probably shutdown (bad instance)
 	if ( Error < 0 )
 	{
-		UE_LOG( LogTemp, Warning, TEXT( "PopH264_PushData() returned %d. InstanceHandle=%d" ), Error, mInstanceHandle );
+		UE_LOG( PopH264, Warning, TEXT( "PopH264_PushData() returned %d. InstanceHandle=%d" ), Error, mInstanceHandle );
 	}
 }
 
@@ -145,17 +150,13 @@ TSharedPtr<FJsonObject> ParseJson(TArray<char>& JsonStringArray)
 	
 	if ( !FJsonSerializer::Deserialize(JsonReader, ParsedJsonObject) )
 	{
-		UE_LOG( LogTemp, Warning, TEXT( "Failed to deserialise frame JSON: %s" ), *JsonString );
+		UE_LOG( PopH264, Warning, TEXT( "Failed to deserialise frame JSON: %s" ), *JsonString );
 		return nullptr;
 	}
 
 	//	get the parsed json as an object
 	return ParsedJsonObject;
-	/*
-		Culture = JsonParsed[0]->AsObject()->GetStringField(FString("Culture"));
-		MusicVolume = JsonParsed[1]->AsObject()->GetNumberField(FString("MusicVolume"));
-		SoundVolume = JsonParsed[2]->AsObject()->GetNumberField(FString("SoundVolume"));
-*/}
+}
 
 
 //	wrappers to suppress errors/warnings for missing keys (which don't mention the keys)
@@ -265,7 +266,7 @@ void PopH264FrameMeta::ParseJson(FJsonObject& Json)
 }
 
 
-UTexture2D* FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
+TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 {
 	//	peek frame, is there a new frame?
 	TArray<char> FrameMetaString;
@@ -282,15 +283,16 @@ UTexture2D* FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 	
 	//	parse json
 	auto FrameMetaJson = ParseJson(FrameMetaString);
-	//	error
+	//	error parsing
 	if ( !FrameMetaJson )
-		return nullptr;
+		return TArray<UTexture2D*>();
+		
 	PopH264FrameMeta FrameMeta;
 	FrameMeta.ParseJson(*FrameMetaJson);
 	
-	//	no frame
+	//	no new frame
 	if ( FrameMeta.mFrameNumber < 0 )
-		return nullptr;
+		return TArray<UTexture2D*>();
 	
 	//	allocate data buffer for the frame
 	TArray<uint8_t> Plane0Data;
@@ -302,11 +304,55 @@ UTexture2D* FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 	
 	auto PoppedFrameNumber = PopH264_PopFrame( mInstanceHandle, Plane0Data.GetData(), Plane0Data.Num(), Plane1Data.GetData(), Plane1Data.Num(), Plane2Data.GetData(), Plane2Data.Num() );
 	if ( PoppedFrameNumber < 0 )
-		return nullptr;
+		return TArray<UTexture2D*>();
 
-	//	todo: make textures
-	UE_LOG( LogTemp, Warning, TEXT( "Todo: make textures" ) );
-	return nullptr;	
+	//	gr: we could allocate textures early, then pass the Raw BulkData into the plugin and write directly
+	//		to save a copy
+	TArray<UTexture2D*> Textures;
+	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta) -> UTexture2D*
+	{
+		if ( PlaneBytes.Num() == 0 )
+			return nullptr;
+			
+		UTexture2D* pTexture = UTexture2D::CreateTransient( PlaneMeta.mWidth, PlaneMeta.mHeight );
+		{
+			UE_LOG( LogTemp, Error, TEXT( "Failed to allocate plane texture %dx%d" ), PlaneMeta.mWidth, PlaneMeta.mHeight );
+			return nullptr;
+		}
+		auto& Texture = *pTexture;
+		FTexture2DMipMap& TextureMip = Texture.PlatformData->Mips[0];
+		uint8_t* MipPixels = static_cast<uint8_t*>( TextureMip.BulkData.Lock(LOCK_READ_WRITE) );
+		if ( !MipPixels )
+		{
+			UE_LOG( PopH264, Error, TEXT( "Failed to lock mip0 pixels for plane %dx%d (leaking texture?)" ), PlaneMeta.mWidth, PlaneMeta.mHeight );
+			return nullptr;
+		}
+		//	GetElementCount()
+		auto MipPixelsSize = TextureMip.BulkData.GetBulkDataSize();
+		
+		//	do a safe copy
+		auto CopySize = FGenericPlatformMath::Min<int32_t>( PlaneBytes.Num(), MipPixelsSize );
+		auto* Source = PlaneBytes.GetData();
+		auto* Dest = MipPixels;
+		//FMemory::BigBlockMemcpy any different?
+		FMemory::Memcpy( Dest, Source, CopySize );
+
+		TextureMip.BulkData.Unlock();
+		Texture.UpdateResource();
+		return pTexture;
+	};
+	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta)
+	{
+		auto* Texture = MakeTexture( PlaneBytes, PlaneMeta );
+		if ( !Texture )
+			return;
+		Textures.Push(Texture);
+	};
+	MakeAndAddTexture( Plane0Data, FrameMeta.mPlane0 );
+	MakeAndAddTexture( Plane1Data, FrameMeta.mPlane1 );
+	MakeAndAddTexture( Plane2Data, FrameMeta.mPlane2 );
+	
+	return Textures;
 	/*
 	//	
 	TSharedPtr<UTexture2D> pNewTexture( 

@@ -5,6 +5,9 @@
 #include "Modules/ModuleManager.h"
 #include "Templates/UniquePtr.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(PopH264, Log, All);
+
+
 class FPopH264DecoderInstance;
 
 
@@ -42,7 +45,10 @@ public:
 
 
 	//	gr: must be called on game thread
-	UTexture2D*		PopFrame(PopH264FrameMeta_t& Meta);
+	//	gr: Not sure if it's wise to just pass raw UTexture2D* pointers around, apparently if they're assigned to
+	//		UPROPERTY members, they wont get garbage collected, but... when MIGHT they get garbage collected?
+	//		should this return shared_ptr's ?
+	TArray<UTexture2D*>		PopFrame(PopH264FrameMeta_t& Meta);
 
 private:
 	uint32_t		mInstanceHandle = 0;	//	allocated by dll

@@ -28,10 +28,13 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	mDecoder->PushTestData("RainbowGradient.h264",FrameNumber);
 
 	PopH264FrameMeta_t Meta;
-	auto* NewTexture = mDecoder->PopFrame(Meta);
-	if ( NewTexture )
+	auto NewTextures = mDecoder->PopFrame(Meta);
+	if ( NewTextures.Num() )
 	{
-		UE_LOG( LogTemp, Warning, TEXT( "Got new frame: %d" ), Meta.FrameNumber );
+		UE_LOG( PopH264, Warning, TEXT( "Got new frame: %d x%d planes" ), Meta.FrameNumber, NewTextures.Num() );
+	}
+	else
+	{
 	}
 }
 
