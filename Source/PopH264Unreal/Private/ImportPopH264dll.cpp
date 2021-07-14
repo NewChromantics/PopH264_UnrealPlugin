@@ -76,7 +76,7 @@ bool ImportPopH264dll::importDLL()
 {
 	//TODO: Platforms other than Win64
 	FString filePath = *FPaths::ProjectPluginsDir();
-	filePath += ("CRPlayerPlugin/Source/ThirdParty/popH264/popH264-1.3.38/lib/win64/release/PopH264.dll");
+	filePath += ("PopH264_UnrealPlugin/Source/ThirdParty/PopH264UnrealLibrary/com.newchromantics.poph264-1.3.38/windows/Release_x64/PopH264.dll");
 
 	if (FPaths::FileExists(filePath))
 	{

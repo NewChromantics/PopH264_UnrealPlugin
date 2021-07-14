@@ -4,6 +4,7 @@
 
 #include "Modules/ModuleManager.h"
 #include "Templates/UniquePtr.h"
+#include "ImportPopH264dll.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(PopH264, Log, All);
 
@@ -17,6 +18,7 @@ public:
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+	ImportPopH264dll instance;
 
 private:
 	/** Handle to the test dll we will load */
@@ -30,7 +32,7 @@ public:
 	size_t	FrameNumber = 0;
 };
 
-class FPopH264DecoderInstance
+class POPH264UNREAL_API FPopH264DecoderInstance
 {
 public:
 	//	gr: this is mostly just a helper for implementation reference

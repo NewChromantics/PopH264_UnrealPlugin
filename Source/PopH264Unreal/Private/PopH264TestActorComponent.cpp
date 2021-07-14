@@ -31,10 +31,29 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	auto NewTextures = mDecoder->PopFrame(Meta);
 	if ( NewTextures.Num() )
 	{
+		NewTextures[1]->UpdateResource();
+		NewTextures[0]->UpdateResource();
 		UE_LOG( PopH264, Warning, TEXT( "Got new frame: %d x%d planes" ), Meta.FrameNumber, NewTextures.Num() );
+
+		AActor* Actor = GetOwner();
+		TArray<UStaticMeshComponent*> Components;
+		Actor->GetComponents<UStaticMeshComponent>(Components);
+		for( int32 i=0; i<Components.Num(); i++ )
+		{
+			UStaticMeshComponent* StaticMeshComponent = Components[i];
+			UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
+
+			UMaterialInstanceDynamic* material = StaticMeshComponent->CreateDynamicMaterialInstance(0);
+			if (material != nullptr)
+			{
+				material->SetTextureParameterValue(FName("Video"), NewTextures[0]);
+				material->SetTextureParameterValue(FName("Video2"), NewTextures[1]);
+			}
+		}
 	}
 	else
 	{
 	}
+	
 }
 
