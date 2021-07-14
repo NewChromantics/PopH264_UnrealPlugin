@@ -26,17 +26,20 @@ void FPopH264UnrealModule::StartupModule()
 	//	gr: don't need to manually load the framework, (symbols are lazy-loaded on-access)
 	//		we can still dload() the framework for completeness
 	//		but we will need to explicitly load handle for the DLL
-/*
-	// Add on the relative location of the third party dll and load it
-	FString LibraryPath;
+
+	//	need to loadlibrary() for UE on windows to find dll
+	//	shouldn't be needed for build as dll should be copied to output dir
 #if PLATFORM_WINDOWS
-	LibraryPath = FPaths::Combine(*BaseDir, TEXT("Binaries/ThirdParty/PopH264UnrealLibrary/Win64/ExampleLibrary.dll"));
+	{
+		FString LibraryPath;
+		LibraryPath = FPaths::Combine(*BaseDir, TEXT("Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll"));
+		ExampleLibraryHandle = FPlatformProcess::GetDllHandle(*LibraryPath);
+	}
 #elif PLATFORM_MAC
-    LibraryPath = FPaths::Combine(*BaseDir, TEXT("Source/ThirdParty/PopH264UnrealLibrary/Mac/Release/libExampleLibrary.dylib"));
+	//LibraryPath = FPaths::Combine(*BaseDir, TEXT("Source/ThirdParty/PopH264UnrealLibrary/Mac/Release/libExampleLibrary.dylib"));
 #endif // PLATFORM_WINDOWS
 
-	ExampleLibraryHandle = !LibraryPath.IsEmpty() ? FPlatformProcess::GetDllHandle(*LibraryPath) : nullptr;
-*/
+
 	if ( true )//ExampleLibraryHandle)
 	{
 		// Call the test function in the third party library that opens a message box
