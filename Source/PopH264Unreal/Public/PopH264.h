@@ -9,7 +9,7 @@
 #include "ImportPopH264dll.h"
 #include "Serialization/JsonWriter.h"
 
-#include "PopH264UnrealLibrary/com.newchromantics.poph264-1.3.38/windows/Release_x64/PopH264.h"
+#include "PopH264/windows/Release_x64/PopH264.h"
 
 /*
 class CRPLAYERPLUGIN_API PopH264

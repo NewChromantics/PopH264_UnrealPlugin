@@ -11,7 +11,7 @@ public class PopH264Unreal : ModuleRules
 		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
-				"PopH264Unreal"
+				
 			}
 			);
 				
@@ -19,6 +19,7 @@ public class PopH264Unreal : ModuleRules
 		PrivateIncludePaths.AddRange(
 			new string[] {
 				// ... add other private include paths required here ...
+				"PopH264"
 			}
 			);
 			
@@ -27,7 +28,7 @@ public class PopH264Unreal : ModuleRules
 			new string[]
 			{
 				"Core",
-				"PopH264UnrealLibrary",
+				"PopH264",
 				"Projects",
 				"Json"
 				// ... add other public dependencies that you statically link with here ...

@@ -7,7 +7,7 @@
 #include "GenericPlatform/GenericPlatformMath.h"
 
 //	gr: todo: add include path to plugin build.cs
-#include "PopH264UnrealLibrary/com.newchromantics.poph264-1.3.38/windows/Release_x64/PopH264.h"
+#include "PopH264/windows/Release_x64/PopH264.h"
 #include <iterator>
 
 #define LOCTEXT_NAMESPACE "FPopH264UnrealModule"
