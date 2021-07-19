@@ -24,9 +24,14 @@ public class PopH264 : ModuleRules
 			// Ensure that the DLL is staged along with the executable
 			var OutputPath = "$(TargetOutputDir)/PopH264.dll";
 			//var SourcePath = Path.Combine(ModuleDirectory, "windows", "Release_x64", "PopH264.dll");
-			var SourcePath = "$(PluginDir)/Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll";
+			//var SourcePath = "$(PluginDir)/Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll";
+			var SourcePath = Path.Combine(ModuleDirectory, "windows", "Release_x64", "PopH264.dll");
 			//RuntimeDependencies.Add("$(TargetOutputDir)/Foo.dll", Path.Combine(PluginDirectory, "Source/ThirdParty/bin/Foo.dll"));
-			RuntimeDependencies.Add(OutputPath, SourcePath);
+			//RuntimeDependencies.Add(OutputPath, SourcePath);
+			RuntimeDependencies.Add(SourcePath);
+			RuntimeDependencies.Add("$(PluginDir)/Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll");
+			Tools.DotNETCommon.Log.TraceInformation("Path");
+			Tools.DotNETCommon.Log.TraceInformation(SourcePath);
 
 			//RuntimeDependencies.Add("$(PluginDir)/Binaries/ThirdParty/PopH264/windows/Release_x64/PopH264.dll");
 			//RuntimeDependencies.Add("$(PluginDir)/Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll");

@@ -30,6 +30,7 @@ void FPopH264UnrealModule::StartupModule()
 	//	need to loadlibrary() for UE on windows to find dll
 	//	shouldn't be needed for build as dll should be copied to output dir
 #if PLATFORM_WINDOWS
+	//if ( false)
 	{
 		FString LibraryPath;
 		LibraryPath = FPaths::Combine(*BaseDir, TEXT("Source/ThirdParty/PopH264/windows/Release_x64/PopH264.dll"));
@@ -40,7 +41,8 @@ void FPopH264UnrealModule::StartupModule()
 #endif // PLATFORM_WINDOWS
 
 
-	if ( true )//ExampleLibraryHandle)
+	//if ( ExampleLibraryHandle)
+	if ( true )
 	{
 		// Call the test function in the third party library that opens a message box
 		//ExampleLibraryFunction();
@@ -55,7 +57,7 @@ void FPopH264UnrealModule::StartupModule()
 	}
 	else
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("ThirdPartyLibraryError", "Failed to load example third party library"));
+		//FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("ThirdPartyLibraryError", "Failed to load example third party library"));
 	}
 	
 }
