@@ -31,7 +31,7 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	auto NewTextures = mDecoder->PopFrame(Meta);
 	if (NewTextures.Num())
 	{
-		UE_LOG(PopH264, Warning, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
+		UE_LOG(PopH264, Log, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
 		mLastPlanes = NewTextures;
 	}
 
@@ -46,8 +46,13 @@ void UPopH264TestActorComponent::UpdateMaterial()
 	//	I'm presuming this is synchronous
 	for (auto t = 0; t < mLastPlanes.Num(); t++)
 	{
-		auto& Texture = *mLastPlanes[t];
-		Texture.UpdateResource();
+		auto* Texture = mLastPlanes[t].Get();
+		if (!Texture)
+		{
+			UE_LOG(PopH264, Warning, TEXT("Frame plane %d is unexpectly null"), t );
+			continue;
+		}
+		Texture->UpdateResource();
 	}
 
 	//	todo: use a safe array type
@@ -70,6 +75,10 @@ void UPopH264TestActorComponent::UpdateMaterial()
 		{
 			auto* Texture = mLastPlanes[t].Get();
 			auto ParameterName = MaterialParameterNames[t];
+
+			if ( Texture )
+				UE_LOG(PopH264, Log, TEXT("Set material plane %d texture"), t);
+
 			material->SetTextureParameterValue(ParameterName, Texture);
 		}
 	}
