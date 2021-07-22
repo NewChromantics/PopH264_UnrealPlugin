@@ -409,8 +409,9 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 		auto CopySize = FGenericPlatformMath::Min<int32_t>( PlaneBytes.Num(), MipPixelsSize );
 		auto* Source = PlaneBytes.GetData();
 		auto* Dest = MipPixels;
+		
 		//FMemory::BigBlockMemcpy any different?
-		FMemory::Memcpy( Dest, Source, CopySize );
+		FMemory::Memcpy(Dest, Source, CopySize);
 
 		TextureMip.BulkData.Unlock();
 		Texture.UpdateResource();
@@ -449,6 +450,41 @@ UpdateTextureRegions
 }
 
 
+void FPopH264DecoderInstance::FillTextures(TArray<UTexture2D*>& ExistingTextures,uint8_t Value)
+{
+	for ( int t=0;	t<ExistingTextures.Num();	t++ )
+	{
+		UTexture2D* pTexture = ExistingTextures[t];
+		if (!pTexture)
+			continue;
+
+		auto& Texture = *pTexture;
+		if (!Texture.PlatformData)
+		{
+			UE_LOG(PopH264, Error, TEXT("Allocated texture but no .PlatformData (leaking texture?)"));
+			continue;
+		}
+
+		FTexture2DMipMap& TextureMip = Texture.PlatformData->Mips[0];
+		uint8_t* MipPixels = static_cast<uint8_t*>(TextureMip.BulkData.Lock(LOCK_READ_WRITE));
+		if (!MipPixels)
+		{
+			UE_LOG(PopH264, Error, TEXT("Failed to lock mip0 pixels for texture"));
+			continue;
+		}
+		//	GetElementCount()
+		auto MipPixelsSize = TextureMip.BulkData.GetBulkDataSize();
+
+		//	do a safe copy
+		auto CopySize = MipPixelsSize;
+		auto* Dest = MipPixels;
+
+		FMemory::Memset(Dest, 0xff, CopySize);
+
+		TextureMip.BulkData.Unlock();
+		Texture.UpdateResource();
+	};
+}
 
 
 

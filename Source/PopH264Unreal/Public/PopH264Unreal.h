@@ -52,6 +52,7 @@ public:
 	//		should this return shared_ptr's ?
 	TArray<UTexture2D*>		PopFrame(PopH264FrameMeta_t& Meta);
 	TArray<UTexture2D*>		PopFrame(PopH264FrameMeta_t& Meta, TArray<UTexture2D*>& ExistingTextures);	
+	static void				FillTextures(TArray<UTexture2D*>& ExistingTextures, uint8_t Value = 0xff);
 
 private:
 	uint32_t		mInstanceHandle = 0;	//	allocated by dll
