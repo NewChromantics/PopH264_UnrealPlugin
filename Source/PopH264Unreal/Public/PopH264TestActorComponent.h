@@ -41,10 +41,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Video Texture")
 	UMediaTexture* texture_;
 */
+	TArray<TWeakObjectPtr<UTexture2D>>	mLastPlanes;
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	virtual void PostLoad() override;
+
+	void		UpdateMaterial();
 
 public:	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;

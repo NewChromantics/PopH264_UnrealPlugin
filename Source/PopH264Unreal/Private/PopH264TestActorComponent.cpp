@@ -23,36 +23,55 @@ void UPopH264TestActorComponent::PostLoad()
 void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	
+
 	size_t FrameNumber = 999;
-	mDecoder->PushTestData("RainbowGradient.h264",FrameNumber);
+	mDecoder->PushTestData("RainbowGradient.h264", FrameNumber);
 
 	PopH264FrameMeta_t Meta;
 	auto NewTextures = mDecoder->PopFrame(Meta);
-	if ( NewTextures.Num() )
+	if (NewTextures.Num())
 	{
-		NewTextures[1]->UpdateResource();
-		NewTextures[0]->UpdateResource();
-		UE_LOG( PopH264, Warning, TEXT( "Got new frame: %d x%d planes" ), Meta.FrameNumber, NewTextures.Num() );
-
-		AActor* Actor = GetOwner();
-		TArray<UStaticMeshComponent*> Components;
-		Actor->GetComponents<UStaticMeshComponent>(Components);
-		for( int32 i=0; i<Components.Num(); i++ )
-		{
-			UStaticMeshComponent* StaticMeshComponent = Components[i];
-			UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
-
-			UMaterialInstanceDynamic* material = StaticMeshComponent->CreateDynamicMaterialInstance(0);
-			if (material != nullptr)
-			{
-				material->SetTextureParameterValue(FName("Video"), NewTextures[0]);
-				material->SetTextureParameterValue(FName("Video2"), NewTextures[1]);
-			}
-		}
+		UE_LOG(PopH264, Warning, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
+		mLastPlanes = NewTextures;
 	}
-	else
+
+	UpdateMaterial();
+}
+
+void UPopH264TestActorComponent::UpdateMaterial()
+{
+	//	make sure texture is updated on gpu 
+	//	should have been done earlier I think so they're ready to use...
+	//	or use the async texture update, and not return until we know texture is updated
+	//	I'm presuming this is synchronous
+	for (auto t = 0; t < mLastPlanes.Num(); t++)
 	{
+		auto& Texture = *mLastPlanes[t];
+		Texture.UpdateResource();
+	}
+
+	//	todo: use a safe array type
+	static const FName MaterialParameterNames[] = { FName("Video"), FName("Video2") , FName("Video3") };
+
+	AActor* Actor = GetOwner();
+	TArray<UStaticMeshComponent*> Components;
+	Actor->GetComponents<UStaticMeshComponent>(Components);
+	for( int32 i=0; i<Components.Num(); i++ )
+	{
+		UStaticMeshComponent* StaticMeshComponent = Components[i];
+		UStaticMesh* StaticMesh = StaticMeshComponent->GetStaticMesh();
+
+		UMaterialInstanceDynamic* material = StaticMeshComponent->CreateDynamicMaterialInstance(0);
+		if (!material)
+			continue;
+
+		//	gr: set a param to null if no plane for that index?
+		for (auto t = 0; t < mLastPlanes.Num(); t++)
+		{
+			auto* Texture = mLastPlanes[t].Get();
+			auto ParameterName = MaterialParameterNames[t];
+			material->SetTextureParameterValue(ParameterName, Texture);
+		}
 	}
 	
 }

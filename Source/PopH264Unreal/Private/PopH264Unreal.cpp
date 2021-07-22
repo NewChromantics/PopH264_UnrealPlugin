@@ -310,8 +310,10 @@ void PopH264FrameMeta::ParseJson(FJsonObject& Json)
 }
 
 
-TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
+TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 {
+	TArray<TWeakObjectPtr<UTexture2D>> NoFrame;
+
 	//	peek frame, is there a new frame?
 	TArray<char> FrameMetaString;
 	//FrameMetaString.Init( '\0', 50 * 1024 );	<-- insanely slow
@@ -329,14 +331,14 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 	auto FrameMetaJson = ParseJson(FrameMetaString);
 	//	error parsing
 	if ( !FrameMetaJson )
-		return TArray<UTexture2D*>();
+		return NoFrame;
 		
 	PopH264FrameMeta FrameMeta;
 	FrameMeta.ParseJson(*FrameMetaJson);
 	
 	//	no new frame
 	if ( FrameMeta.mFrameNumber < 0 )
-		return TArray<UTexture2D*>();
+		return NoFrame;
 	
 	//	allocate data buffer for the frame
 	//	gr: can we use BulkData, and can we use the bulk data directly from a texture...
@@ -349,12 +351,12 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 	
 	auto PoppedFrameNumber = PopH264_PopFrame( mInstanceHandle, Plane0Data.GetData(), Plane0Data.Num(), Plane1Data.GetData(), Plane1Data.Num(), Plane2Data.GetData(), Plane2Data.Num() );
 	if ( PoppedFrameNumber < 0 )
-		return TArray<UTexture2D*>();
+		return NoFrame;
 
 	//	gr: we could allocate textures early, then pass the Raw BulkData into the plugin and write directly
 	//		to save a copy
-	TArray<UTexture2D*> Textures;
-	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex) -> UTexture2D*
+	TArray<TWeakObjectPtr<UTexture2D>> Textures;
+	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex) -> TWeakObjectPtr<UTexture2D>
 	{
 		if ( PlaneBytes.Num() == 0 )
 			return nullptr;
@@ -395,12 +397,15 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 
 		TextureMip.BulkData.Unlock();
 		Texture.UpdateResource();
-		return pTexture;
+
+		//	gr: move this further up so its deallocated (does weakpointer dealloc?) so errors dont leak
+		TWeakObjectPtr<UTexture2D> TexturePtr(pTexture);
+		return TexturePtr;
 	};
 	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex)
 	{
-		auto* Texture = MakeTexture( PlaneBytes, PlaneMeta, PlaneIndex );
-		if ( !Texture )
+		auto Texture = MakeTexture( PlaneBytes, PlaneMeta, PlaneIndex );
+		if ( Texture.IsValid() )
 			return;
 		Textures.Push(Texture);
 	};
