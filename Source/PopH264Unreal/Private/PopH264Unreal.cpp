@@ -310,9 +310,9 @@ void PopH264FrameMeta::ParseJson(FJsonObject& Json)
 }
 
 
-TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
+TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
 {
-	TArray<TWeakObjectPtr<UTexture2D>> NoFrame;
+	TArray<UTexture2D*> NoFrame;
 
 	//	peek frame, is there a new frame?
 	TArray<char> FrameMetaString;
@@ -355,8 +355,8 @@ TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264Fram
 
 	//	gr: we could allocate textures early, then pass the Raw BulkData into the plugin and write directly
 	//		to save a copy
-	TArray<TWeakObjectPtr<UTexture2D>> Textures;
-	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex) -> TWeakObjectPtr<UTexture2D>
+	TArray<UTexture2D*> Textures;
+	auto MakeTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex) -> UTexture2D*
 	{
 		if ( PlaneBytes.Num() == 0 )
 			return nullptr;
@@ -372,6 +372,8 @@ TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264Fram
 			UE_LOG( LogTemp, Error, TEXT( "Failed to allocate plane texture %dx%d" ), PlaneMeta.mWidth, PlaneMeta.mHeight );
 			return nullptr;
 		}
+		//	test: add ref to pointer to stop it being deallocated
+		//UObject::AddReferencedObjects(pTexture);
 		auto& Texture = *pTexture;
 		if ( !Texture.PlatformData )
 		{
@@ -398,9 +400,7 @@ TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264Fram
 		TextureMip.BulkData.Unlock();
 		Texture.UpdateResource();
 
-		//	gr: move this further up so its deallocated (does weakpointer dealloc?) so errors dont leak
-		TWeakObjectPtr<UTexture2D> TexturePtr(pTexture);
-		return TexturePtr;
+		return pTexture;
 	};
 	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex)
 	{

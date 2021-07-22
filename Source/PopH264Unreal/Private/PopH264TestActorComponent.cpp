@@ -27,12 +27,16 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	size_t FrameNumber = 999;
 	mDecoder->PushTestData("RainbowGradient.h264", FrameNumber);
 
-	PopH264FrameMeta_t Meta;
-	auto NewTextures = mDecoder->PopFrame(Meta);
-	if (NewTextures.Num())
+	//if (!mHadFrame)
 	{
-		UE_LOG(PopH264, Log, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
-		mLastPlanes = NewTextures;
+		PopH264FrameMeta_t Meta;
+		auto NewTextures = mDecoder->PopFrame(Meta);
+		if (NewTextures.Num())
+		{
+			UE_LOG(PopH264, Log, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
+			mLastPlanes = NewTextures;
+			mHadFrame = true;
+		}
 	}
 
 	UpdateMaterial();
@@ -46,7 +50,7 @@ void UPopH264TestActorComponent::UpdateMaterial()
 	//	I'm presuming this is synchronous
 	for (auto t = 0; t < mLastPlanes.Num(); t++)
 	{
-		auto* Texture = mLastPlanes[t].Get();
+		auto* Texture = mLastPlanes[t];
 		if (!Texture)
 		{
 			UE_LOG(PopH264, Warning, TEXT("Frame plane %d is unexpectly null"), t );
@@ -73,7 +77,7 @@ void UPopH264TestActorComponent::UpdateMaterial()
 		//	gr: set a param to null if no plane for that index?
 		for (auto t = 0; t < mLastPlanes.Num(); t++)
 		{
-			auto* Texture = mLastPlanes[t].Get();
+			auto* Texture = mLastPlanes[t];
 			auto ParameterName = MaterialParameterNames[t];
 
 			if ( Texture )

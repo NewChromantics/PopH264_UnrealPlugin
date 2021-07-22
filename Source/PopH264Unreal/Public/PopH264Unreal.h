@@ -50,7 +50,7 @@ public:
 	//	gr: Not sure if it's wise to just pass raw UTexture2D* pointers around, apparently if they're assigned to
 	//		UPROPERTY members, they wont get garbage collected, but... when MIGHT they get garbage collected?
 	//		should this return shared_ptr's ?
-	TArray<TWeakObjectPtr<UTexture2D>>	PopFrame(PopH264FrameMeta_t& Meta);
+	TArray<UTexture2D*>		PopFrame(PopH264FrameMeta_t& Meta);
 
 private:
 	uint32_t		mInstanceHandle = 0;	//	allocated by dll

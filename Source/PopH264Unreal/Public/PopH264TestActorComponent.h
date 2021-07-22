@@ -41,7 +41,11 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Video Texture")
 	UMediaTexture* texture_;
 */
-	TArray<TWeakObjectPtr<UTexture2D>>	mLastPlanes;
+	//	having a UProperty means naked UObject-based pointers inside an array will get a strong pointer refernece
+	UPROPERTY()
+	TArray<UTexture2D*> mLastPlanes;
+	bool	mHadFrame = false;	
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
