@@ -405,7 +405,7 @@ TArray<TWeakObjectPtr<UTexture2D>> FPopH264DecoderInstance::PopFrame(PopH264Fram
 	auto MakeAndAddTexture = [&](TArray<uint8_t>& PlaneBytes,PopH264FramePlaneMeta& PlaneMeta,int PlaneIndex)
 	{
 		auto Texture = MakeTexture( PlaneBytes, PlaneMeta, PlaneIndex );
-		if ( Texture.IsValid() )
+		if ( !Texture )
 			return;
 		Textures.Push(Texture);
 	};
