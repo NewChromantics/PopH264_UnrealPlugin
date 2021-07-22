@@ -30,7 +30,7 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	//if (!mHadFrame)
 	{
 		PopH264FrameMeta_t Meta;
-		auto NewTextures = mDecoder->PopFrame(Meta);
+		auto NewTextures = mDecoder->PopFrame(Meta,mLastPlanes);
 		if (NewTextures.Num())
 		{
 			UE_LOG(PopH264, Log, TEXT("Got new frame: %d x%d planes"), Meta.FrameNumber, NewTextures.Num());
@@ -44,21 +44,6 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 
 void UPopH264TestActorComponent::UpdateMaterial()
 {
-	//	make sure texture is updated on gpu 
-	//	should have been done earlier I think so they're ready to use...
-	//	or use the async texture update, and not return until we know texture is updated
-	//	I'm presuming this is synchronous
-	for (auto t = 0; t < mLastPlanes.Num(); t++)
-	{
-		auto* Texture = mLastPlanes[t];
-		if (!Texture)
-		{
-			UE_LOG(PopH264, Warning, TEXT("Frame plane %d is unexpectly null"), t );
-			continue;
-		}
-		Texture->UpdateResource();
-	}
-
 	//	todo: use a safe array type
 	static const FName MaterialParameterNames[] = { FName("Video"), FName("Video2") , FName("Video3") };
 

@@ -309,8 +309,13 @@ void PopH264FrameMeta::ParseJson(FJsonObject& Json)
 	}
 }
 
-
 TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta)
+{
+	TArray<UTexture2D*> ExistingTextures;
+	return PopFrame(OutputMeta, ExistingTextures);
+}
+
+TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& OutputMeta,TArray<UTexture2D*>& ExistingTextures)
 {
 	TArray<UTexture2D*> NoFrame;
 
@@ -366,7 +371,16 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 		auto TextureNameString = FString::Printf( TEXT( "PopH264 #%d Plane%d %dx%d" ), PoppedFrameNumber, PlaneIndex, Width, Height );
 		FName TextureName( *TextureNameString );
 
-		UTexture2D* pTexture = UTexture2D::CreateTransient( Width, Height, PlaneMeta.mPixelFormat, TextureName );
+		UTexture2D* pTexture = nullptr;
+
+		//	reuse existing texture
+		if (PlaneIndex < ExistingTextures.Num())
+			pTexture = ExistingTextures[PlaneIndex];
+
+		//	no existing one, allocate a new one
+		if ( !pTexture )
+			pTexture = UTexture2D::CreateTransient( Width, Height, PlaneMeta.mPixelFormat, TextureName );
+		
 		if ( !pTexture )
 		{
 			UE_LOG( LogTemp, Error, TEXT( "Failed to allocate plane texture %dx%d" ), PlaneMeta.mWidth, PlaneMeta.mHeight );
@@ -380,6 +394,7 @@ TArray<UTexture2D*> FPopH264DecoderInstance::PopFrame(PopH264FrameMeta_t& Output
 			UE_LOG( PopH264, Error, TEXT( "Allocated texture but no .PlatformData (leaking texture?)" ) );
 			return nullptr;
 		}
+
 		FTexture2DMipMap& TextureMip = Texture.PlatformData->Mips[0];
 		uint8_t* MipPixels = static_cast<uint8_t*>( TextureMip.BulkData.Lock(LOCK_READ_WRITE) );
 		if ( !MipPixels )
