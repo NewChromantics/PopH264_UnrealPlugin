@@ -25,7 +25,9 @@ void UPopH264TestActorComponent::TickComponent(float DeltaTime, ELevelTick TickT
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	size_t FrameNumber = 999;
-	mDecoder->PushTestData("RainbowGradient.h264", FrameNumber);
+	static int x = 0;
+	const char* TestDataName = ((x++) & 1) ? "GreyscaleGradient.h264" : "RainbowGradient.h264";
+	mDecoder->PushTestData(TestDataName, FrameNumber);
 
 	//if (!mHadFrame)
 	{
